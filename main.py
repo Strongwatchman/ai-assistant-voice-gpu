@@ -1,5 +1,4 @@
-# Entry point: main.py
-# This orchestrates the assistant loop with error handling, GPU cleanup, and modular triggers
+# main.py — Cleaned version with 'm' key for model selector
 
 import os
 import time
@@ -9,9 +8,9 @@ from transcriber import transcribe
 from llm_handler import generate_response
 from tts_handler import speak_xtts
 from recorder import record_audio
-from keyboard_handler import listen_for_keypress  # placeholder
 from state import init_xtts_model, get_xtts_model
 from voice_selector import choose_voice, test_voice, toggle_xtts_clone
+from model_selector import choose_model  # ✅ ADDED for 'm' key model switch
 
 def clean_gpu_memory():
     gc.collect()
@@ -24,7 +23,7 @@ def initialize():
     init_xtts_model()
     print("\n✅ Voice Assistant Ready. XTTS expressive model active.\n")
     print("🔘 Press Enter to talk | Type 't' to type | Press 'C' to choose voice")
-    print("🎤 Press 'X' to toggle XTTS cloning | Press 'V' to test voice | Type 'q' to quit\n")
+    print("🎤 Press 'X' to toggle XTTS cloning | Press 'V' to test voice | Press 'M' to switch model | Type 'q' to quit\n")
 
 def handle_user_input(user_input):
     if user_input.lower() == 'q':
@@ -40,6 +39,9 @@ def handle_user_input(user_input):
         return True, None
     elif user_input.lower() == 'x':
         toggle_xtts_clone()
+        return True, None
+    elif user_input.lower() == 'm':
+        choose_model()  # ✅ Fixed block for 'm' model selector
         return True, None
     elif user_input == '':
         record_audio("input.wav")

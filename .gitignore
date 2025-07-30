@@ -1,8 +1,27 @@
+# Virtual environment
 venv310/
 __pycache__/
+
+# Audio & model artifacts
 *.wav
 *.pt
 *.gguf
 *.log
+
+# Model and build folders
 models/
 llama.cpp/build/
+
+# Large or irrelevant files
+*.zip
+*.tar.xz
+*.bak
+*.OLD
+cudnn-*/
+Discriminator/
+Processing/
+Real-time/
+Saving/
+Text/
+Text:/
+.selected_model
