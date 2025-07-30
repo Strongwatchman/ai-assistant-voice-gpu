@@ -1,74 +1,111 @@
-# ARK (Autonomous Repository of Knowledge)
+# AI Voice Assistant (Stable Local Build)
 
-**ARK** is a locally-run, voice-enabled AI assistant built to support resilience, permaculture, off-grid living, and self-sovereignty in the face of modern digital chaos.
+This is a **locally-run, voice-enabled AI assistant**, designed to operate without internet dependence using open-source models and tools.
 
-> Designed as both a daily-use assistant and a fallback digital sanctuary in case of systemic collapse.
+Currently supports **text or voice interaction**, custom voice cloning, and modular LLMs via `gguf`.
 
-## ⚙️ What It Does
+## ✅ Current Features (Stable)
 
-- Runs multiple **GGUF LLMs** locally using GPU acceleration.
-- Switchable **voice synthesis** (via Kōki TTS2 and custom cloned voices).
-- Modular command-line interface for:
-  - Choosing model
-  - Activating voice
-  - Listening and responding
-- Intended future features:
-  - Local/offline mobile app
-  - Web UI (Famous.ai frontend)
-  - Avatar-based personalities
-  - Crypto DAO interaction (XRP Ledger: FoodScapeCoin, FarmCoin, DowCoin)
-  - Knowledge modules for permaculture, herbal medicine, and biblical preparedness
+- 🧠 **Local LLMs (GGUF)**  
+  - Supports multiple models (e.g., Nous, Mythomax, Mistral, etc.) * STILL JANKY OpenHermes works, Zephyr works, the others need tuning. 
+  - Manual selection via CLI
+- 🔊 **Voice Output**  
+  - TTS via Kōki TTS2 (57+ voices)
+  - Custom cloned voices (e.g., Optimus Prime, Mike Boudet)
+- 🛠️ **Command-line interface**  
+  - Simple terminal input to control LLM, voice, and input mode
+- 📦 **Offline-first**  
+  - Designed to run without cloud APIs
+  - Works with local hardware: tested on NVIDIA 3050 (8GB), 32GB RAM, i7
 
-## 🔧 How to Use
+## ⚠️ In Progress / Needs Work
 
-> ⚠️ Requirements: Python, GPU with 8GB+, Koqui TTS, GGUF-compatible runner
+- ❌ No session memory or chat threading yet
+- ❌ LLM handler is *barely holding it together* — model routing is brittle
+- ❌ No clean abstraction for voice/model handling
+- ❌ No web/app integration yet
+
+---
+
+## 🚀 How to Run
 
 ```bash
 git clone https://github.com/Strongwatchman/ai-assistant-voice-gpu
 cd ai-assistant-voice-gpu
-# Setup your environment
 pip install -r requirements.txt
-# Run the main assistant
+
+# Launch assistant
 python main.py
 
-Available Commands:
---load-model — Choose and load an LLM
+# Follow the prompts to select:
+# - Your LLM
+# - Your voice (TTS or clone)
+# - Text input or mic input
 
---select-voice — Choose TTS voice or clone
+--------------------------
 
---listen — Begin live voice input
+🔮 Future Direction (ARC/ARK System)
+This project is planned to evolve into a larger modular system:
+ARC (Autonomous Resilience Core) — the control center
+ARK (Autonomous Repository of Knowledge) — specific knowledge modules (permaculture, medicine, crypto, etc.)
+This voice assistant is the early alpha prototype that will power those future components.
 
---text — Use manual text input instead
+## 🛣️ Roadmap
+### 🔧 Core Assistant Features (Short-Term)
+- [ ] Get better hardware for CUDA Development
+- [ ] Refactor LLM handler to support dynamic switching, temp settings, max tokens
+- [ ] Modular voice handler for quick swapping of TTS engines + clones
+- [ ] Add persistent config file for user defaults (model, voice, input method)
+- [ ] Build lightweight chat memory (context tracking, JSON-based)
+- [ ] CLI flags for launching preferred ARK module quickly
+- [ ] Build out USB-portable version (voice optional fallback)
 
-🧠 Vision
-ARK will eventually be available in three formats:
+### 🌱 Agricultural Knowledge Expansion
+- [ ] Expand permaculture database (user-driven + curated)
+- [ ] Add ARK modules for:
+  - [ ] `ark_apothecary.py` – Herbal + real medicine
+  - [ ] `ark_livestock.py` – Animals, husbandry, rotation systems
+  - [ ] `ark_preservation.py` – Food storage, fermentation, solar drying
 
-Local Terminal – Minimalist, apocalypse-ready CLI tool
+### 🪙 Crypto Infrastructure for Local Ag Commerce Projects
+- [ ] Integrate XRP Ledger tooling via Python (XUMM API, XRPL-Py)
+- [ ] Formalize `FoodScapeCoin` contract + testnet deployment
+- [ ] Create staking rules (3-year hold for DAO participation)
+- [ ] Issue `FarmCoin` for internal ag transactions (feed, seed, tools)
+- [ ] Deploy `DowCoin` for DAO governance of individual projects
+- [ ] Local-only wallet interface for trading + transparency (no exchanges)
+- [ ] Trustless resource attribution (tractors, land, donations = token equity)
 
-Web UI/App – Visual interface with customizable characters
+### 🏗️ Platform Development (Mid-Term)
+- [ ] FastAPI server to expose assistant to mobile/web clients
+- [ ] Modular UI to switch voices, ARKs, and sass levels (😐 → 😏 → 😈)
+- [ ] User profiles with preferred characters, settings, and knowledge domains
+- [ ] Model fallback detection + auto-reload (for weak GPUs)
 
-USB Edition – Fully offline, portable, text-only survival assistant
+### ⚔️ Off-Grid / Collapse Readiness
+- [ ] Prepare “USB Stick of Wisdom” mode with minimal hardware requirements
+- [ ] Create encrypted data archive (permaculture, first aid, recipes, crypto keys)
+- [ ] AI fallback: text-only with no dependencies (ideal for refugees and bush dwellers)
+- [ ] PDF print/export: Generate homestead survival books from ARK data
 
-🛠️ Roadmap
- Multi-LLM support via GGUF
+🤝 Want to Help?
+Open an Issue or Discussion here on GitHub.
 
- Voice output (TTS2 + voice cloning)
+We’re looking for help with:
 
- Command router module
+Python code cleanup
+Model integration
+Voice UX / personalities
+Config + storage solutions
 
- FastAPI wrapper for mobile integration
+🧱 System Info
+Tested on:
 
- Avatar/Character persona framework
+NVIDIA RTX 3050 (8GB)
+Intel i7, 32GB RAM
+Python 3.10
+Ubuntu + Windows WSL2
 
- Crypto DAO governance module
-
-🤝 Contributing
-Want to help build the Ark? Create an Issue or Discussion below. We’re especially looking for help with:
-
-Frontend/mobile UI
-
-Voice input/UX design
-
-Avatar animation (lightweight, offline-friendly)
-
-Crypto logic (XRP Ledger)
+📜 License
+MIT — Use it, fork it, break it, fix it.
+This is a survival tool in progress.
