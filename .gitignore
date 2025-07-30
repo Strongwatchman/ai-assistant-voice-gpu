@@ -5,3 +5,4 @@ __pycache__/
 *.gguf
 *.log
 models/
+llama.cpp/build/
