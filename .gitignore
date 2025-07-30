@@ -1,0 +1,7 @@
+venv310/
+__pycache__/
+*.wav
+*.pt
+*.gguf
+*.log
+models/

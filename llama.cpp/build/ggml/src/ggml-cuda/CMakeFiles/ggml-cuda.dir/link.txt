@@ -1,0 +1,1 @@
+/usr/lib/nvidia-cuda-toolkit/bin/g++ -fPIC -shared -Wl,-soname,libggml-cuda.so -o ../../../bin/libggml-cuda.so @CMakeFiles/ggml-cuda.dir/objects1.rsp @CMakeFiles/ggml-cuda.dir/linkLibs.rsp -L"/usr/lib/x86_64-linux-gnu/stubs" -L"/usr/lib/x86_64-linux-gnu"
