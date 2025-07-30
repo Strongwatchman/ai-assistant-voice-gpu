@@ -172,3 +172,20 @@ Zero-knowledge proof voting for private ballots
 AI assistant tools to help DAO founders create governance policies
 Reputation scoring for DAO leaders (based on transparency + yields)
 Dynamic yield schedules based on DAO performance metrics
+
+🤝 Want to Help?
+Open an Issue or Discussion here on GitHub.
+
+We’re looking for help with:
+
+Python code cleanup
+Model integration
+Voice UX / personalities
+Config + storage solutions
+Foodscape Coin (FSC) launch on XRP Ledger
+Farm Coin creation within XRP Ledger and ARC APP
+DAO Coin Creation for qualified porjects
+Graphics UI for Mobile App (Flutter or cross platform)
+Donations to free up my time to work on this project full time!
+
+
