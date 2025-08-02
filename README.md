@@ -1,191 +1,246 @@
-# AI Voice Assistant (Stable Local Build)
+✅ ARC + ARK project architecture
 
-This is a **locally-run, voice-enabled AI assistant**, designed to operate without internet dependence using open-source models and tools.
+# 🎙️ ARC Voice Assistant + Foodscape Ecosystem (Offline-First, AI-Powered)
 
-Currently supports **text or voice interaction**, custom voice cloning, and modular LLMs via `gguf`.
+This repo powers the **Autonomous Resilience Core (ARC)** — a local-first, voice-enabled AI assistant designed to operate without cloud access or internet dependence. It uses open-source LLMs and TTS engines to create an intelligent, modular system for survival, learning, governance, and local organization.
 
-## ✅ Current Features (Stable)
-
-- 🧠 **Local LLMs (GGUF)**  
-  - Supports multiple models (e.g., Nous, Mythomax, Mistral, etc.) * STILL JANKY OpenHermes works, Zephyr works, the others need tuning. 
-  - Manual selection via CLI
-- 🔊 **Voice Output**  
-  - TTS via Kōki TTS2 (57+ voices)
-  - Custom cloned voices (e.g., Optimus Prime, Mike Boudet)
-- 🛠️ **Command-line interface**  
-  - Simple terminal input to control LLM, voice, and input mode
-- 📦 **Offline-first**  
-  - Designed to run without cloud APIs
-  - Works with local hardware: tested on NVIDIA 3050 (8GB), 32GB RAM, i7
-
-## ⚠️ In Progress / Needs Work
-
-- ❌ No session memory or chat threading yet
-- ❌ LLM handler is *barely holding it together* — model routing is brittle
-- ❌ No clean abstraction for voice/model handling
-- ❌ No web/app integration yet
+It is the foundation of the **Foodscape Resilience Ecosystem**, a nonprofit initiative developed under **Foodscape Visions 501(c)(3)** to support regenerative agriculture, local economic sovereignty, and autonomous community governance through offline tools.
 
 ---
 
-## 🚀 How to Run
+## 🧠 ARC + 📚 ARK System
+
+- 🧠 **ARC** – *Autonomous Resilience Core*:  
+  The AI controller that processes voice, text, and LLM interaction. Handles logic, task coordination, and staking logic — runs offline.
+
+- 📚 **ARK** – *Autonomous Repository of Knowledge*:  
+  A collection of modular, offline knowledge packs for permaculture, herbalism, composting, food preservation, DAO governance, and local resilience strategies.
+
+Together, ARC + ARK form a fully local and resilient system for education, decision-making, and action — especially in low-trust or grid-down environments.
+
+---
+
+## ✅ Current Status: Functional Components
+
+### 🎙️ AI Voice Assistant (ARC)
+- ✔️ Text or voice input (mic supported via push-to-talk)
+- ✔️ Local LLMs via `llama.cpp` (Zephyr, OpenHermes tested and stable)
+- ✔️ Text-to-Speech output (Coqui TTS, XTTSv2)
+- ✔️ Voice cloning from reference audio (WAV format)
+- ✔️ Manual speaker selection
+- ✔️ Command-line interface with keybinds
+- ✔️ GPU acceleration on tested hardware (NVIDIA 3050, 8GB VRAM)
+- ✔️ Fully offline-first — no cloud APIs or internet dependencies
+
+### 🪙 Foodscape Coin (XRPL Testnet)
+- ✔️ **FoodscapeCoin (FSC)** deployed on **XRPL Testnet**
+- ✔️ Tested with **Xaman Wallet**
+- ✔️ Trustline mechanics confirmed
+- ❌ XRPL Mainnet token not yet deployed
+- ❌ Staking Hooks and DAO reward logic under development
+
+---
+
+## 🚀 Quickstart
 
 ```bash
 git clone https://github.com/Strongwatchman/ai-assistant-voice-gpu
 cd ai-assistant-voice-gpu
 pip install -r requirements.txt
-
-# Launch assistant
 python main.py
 
-# Follow the prompts to select:
-# - Your LLM
-# - Your voice (TTS or clone)
-# - Text input or mic input
+Follow prompts to select:
+Your local LLM
+Your voice model or clone
+Mic input or manual CLI mode
 
---------------------------
 
-🔮 Future Direction (ARC/ARK System)
-This project is planned to evolve into a larger modular system:
-ARC (Autonomous Resilience Core) — the control center
-ARK (Autonomous Repository of Knowledge) — specific knowledge modules (permaculture, medicine, crypto, etc.)
-This voice assistant is the early alpha prototype that will power those future components.
 
-## 🛣️ Roadmap
-### 🔧 Core Assistant Features (Short-Term)
-- [ ] Get better hardware for CUDA Development
-- [ ] Refactor LLM handler to support dynamic switching, temp settings, max tokens
-- [ ] Modular voice handler for quick swapping of TTS engines + clones
-- [ ] Add persistent config file for user defaults (model, voice, input method)
-- [ ] Build lightweight chat memory (context tracking, JSON-based)
-- [ ] CLI flags for launching preferred ARK module quickly
-- [ ] Build out USB-portable version (voice optional fallback)
+---
 
-### 🌱 Agricultural Knowledge Expansion
-- [ ] Expand permaculture database (user-driven + curated)
-- [ ] Add ARK modules for:
-  - [ ] `ark_apothecary.py` – Herbal + real medicine
-  - [ ] `ark_livestock.py` – Animals, husbandry, rotation systems
-  - [ ] `ark_preservation.py` – Food storage, fermentation, solar drying
+🔮 ARC/ARK Roadmap
+🧠 ARC Development
 
-### 🪙 Crypto Infrastructure for Local Ag Commerce Projects
-- [ ] Integrate XRP Ledger tooling via Python (XUMM API, XRPL-Py)
-- [ ] Formalize `FoodScapeCoin` contract + testnet deployment
-- [ ] Create staking rules (3-year hold for DAO participation)
-- [ ] Issue `FarmCoin` for internal ag transactions (feed, seed, tools)
-- [ ] Deploy `DowCoin` for DAO governance of individual projects
-- [ ] Local-only wallet interface for trading + transparency (no exchanges)
-- [ ] Trustless resource attribution (tractors, land, donations = token equity)
+[x] Push-to-talk and mic input
+[x] XTTS + Coqui TTS voice output
+[x] Basic LLM routing (Zephyr, OpenHermes stable)
 
-### 🏗️ Platform Development (Mid-Term)
-- [ ] FastAPI server to expose assistant to mobile/web clients
-- [ ] Modular UI to switch voices, ARKs, and sass levels (😐 → 😏 → 😈)
-- [ ] User profiles with preferred characters, settings, and knowledge domains
-- [ ] Model fallback detection + auto-reload (for weak GPUs)
+[ ] Refactor LLM engine for model switching and memory
+[ ] Modular TTS handler with custom speaker selection
+[ ] Config file for default voice/model
+[ ] JSON-based lightweight memory
+[ ] CLI flags for launching into specific ARK modules
 
-### ⚔️ Off-Grid / Collapse Readiness
-- [ ] Prepare “USB Stick of Wisdom” mode with minimal hardware requirements
-- [ ] Create encrypted data archive (permaculture, first aid, recipes, crypto keys)
-- [ ] AI fallback: text-only with no dependencies (ideal for refugees and bush dwellers)
-- [ ] PDF print/export: Generate homestead survival books from ARK data
 
-🤝 Want to Help?
-Open an Issue or Discussion here on GitHub.
+📚 ARK Knowledge Packs
 
-We’re looking for help with:
+[ ] ark_apothecary.py – Herbalism + field medicine
+[ ] ark_livestock.py – Animal care, rotation, feed
+[ ] ark_preservation.py – Food drying, fermentation, canning
+[ ] ark_irrigation.py – Gravity-fed, pump-free systems
+[ ] ark_compost.py – Thermal piles, worms, EMO
+[ ] ark_guilds.py – Companion planting, fruit tree guilds
 
-Python code cleanup
-Model integration
-Voice UX / personalities
-Config + storage solutions
 
-🧱 System Info
-Tested on:
 
-NVIDIA RTX 3050 (8GB)
-Intel i7, 32GB RAM
-Python 3.10
-Ubuntu + Windows WSL2
+---
+
+🏛️ Foodscape DAO Token Vision
+
+Built on the XRP Ledger, this future ecosystem will include:
+
+Token	Purpose
+
+🪙 FSC	Utility + staking token for governance access
+🌱 FarmCoin	Used within local DAO projects for barter, goods, services
+🏛️ DowCoin	Minted per project DAO for internal voting and decision-making
+
+
+DAO Lifecycle
+
+1. Proposal – A farm, apothecary, garden co-op submits DAO request
+
+
+2. Review – Council or logic approves; FSC + DWC are issued
+
+
+3. Staking Phase – Participants stake FSC for 3 years
+
+
+4. Activation – Earn FarmCoin, use in local economy
+
+
+5. Maturity – FSC unlocks, DAO can sponsor sub-DAOs
+
+
+
+Staking and DAO logic will be enforced using XRPL Hooks. Development is active.
+
+
+---
+
+🛡️ Off-Grid Readiness
+
+This system is being engineered to operate in grid-down or low-infra conditions:
+
+🧱 Fully local — no internet access required
+
+💾 USB-stick ready — portable resilience system
+
+📃 Knowledge export to printable PDF homestead books
+
+🖥️ Text fallback mode — runs without voice if needed
+
+🔐 Encrypted local data storage planned
+
+
+
+---
+
+🛰️ Dual Mode Strategy: Online App + Offline Resilience
+
+While our focus is offline-first infrastructure, we are also developing:
+
+A mobile-friendly web app to interface with ARC + ARK systems
+
+A cross-platform native mobile app (Android/iOS)
+
+Secure local-first tools for DAO staking, voice control, and community governance
+
+However, we fully anticipate a future where internet access may become unreliable or unavailable. ARC and ARK are designed to:
+
+Run entirely without cloud APIs or external servers
+
+Function on air-gapped systems or USB-stick installs
+
+Operate in rural, remote, or post-collapse environments
+
+
+> 🌐 When the grid is up, ARC will sync and update.
+🛠️ When the grid is down, ARC will still serve.
+
+
+
+Foodscape Visions is building for both the connected world and the collapsed one.
+
+
+---
+
+🤝 Get Involved
+
+We are seeking:
+
+🛠️ Developers:
+
+Python (CLI routing, XRPL Hooks, offline UI)
+
+Voice UX and audio performance
+
+XRPL integration + staking logic
+
+Mobile App User Interface 
+
+
+📦 Contributors:
+
+Writers and educators for ARK knowledge packs
+
+Herbalists, permaculture designers, off-grid system testers
+
+UI/UX or logo/brand designers
+
+
+🎁 Supporters:
+
+Donations to speed full-time development (pending 501(c)(3) approval)
+
+Share this project with people who need resilience tools
+
+Beta testers for early modules
+
+
+
+---
+
+🌿 About Foodscape Visions 501(c)(3)
+
+Foodscape Visions is a nonprofit organization (EIN: ) focused on rebuilding local food economies through education, technology, and community action.
+
+Our Mission:
+
+> To cultivate thriving, sustainable communities by reconnecting people to food, land, and each other — through decentralized tools, regenerative agriculture, and localized economies.
+
+
+
+ARC (Autonomous Resilience Core) and ARK (Autonomous Repository of Knowledge) are flagship tools being developed under Foodscape Visions to empower individuals and communities with offline-first access to AI, knowledge, and governance systems.
+
+All ARC + ARK tools will remain open-source and aligned with our mission of bioregional sovereignty and food resilience.
+
+Learn more at: https://foodscapevisions.org (coming soon)
+
+
+---
 
 📜 License
+
 MIT — Use it, fork it, break it, fix it.
-This is a survival tool in progress.
+This is an open-source survival system in progress.
 
----------------------------------------
 
-🏛️ DAO Governance Model: DowCoin + FoodScapeCoin
-This system supports decentralized, region-based agricultural commerce using three tokens:
-FoodScapeCoin (FSC) – Base utility + staking token
-FarmCoin (FC) – Local commerce + goods exchange token
-DowCoin (DWC) – Governance token for DAO project leadership
+---
 
-🪙 1. FoodScapeCoin (FSC)
-Distributed to approved agricultural projects
-Earn more FSC Coin by staking
-Must be held/staked for 3 years
-Generates passive yield over tim
-Used as collateral for DAO governance participation
-Can be used to purchase FarmCoin or vote in ecosystem-wide referenda
+💼 Legal Status
 
-🐄 2. FarmCoin (FC)
-Issued to users who stake FSC
-Used for local barter and commerce (tools, seeds, feed, services)
-Designed to be regional, not traded globally
-Acts as a fluid economic token inside DAO projects
+Foodscape Visions is a nonprofit organization with IRS EIN # registered in Arizona.
 
-🎓 3. DowCoin (DWC)
-Minted and distributed by each approved DAO project
-Given to:
-Project founders
-Donors (based on resources contributed: land, equipment, labor)
-Grants voting rights on:
-Budget allocation
-Project management decisions
-Leadership changes
-One DAO = One DAOCoin series (non-interchangeable)
+✅ EIN issued
 
-🛠️ DAO Lifecycle
-ProposalIndividual or org proposes an agricultural project: farm, garden co-op, apothecary, etc.
-Review + OnboardingProject is reviewed by ARC DAO council (or automated logic).If accepted:
-Initial FSC allocation is gifted
-DWC is minted and distributed to stakeholders
-Wallets + staking begin
-Staking Period (3 Years)
-Participants must stake FSC to remain in governance
-Yield is accrued for holding
-Early withdrawal burns yield
-Commerce Activation
-Participants earn FarmCoin through staking
-FarmCoin is used to buy/sell/barter with local vendors or partner DAOs
-Maturity + ExpansionAfter 3 years:
-Staked FSC unlocks
-DAO project may “franchise” or sponsor new DAOs
-Voting thresholds may change
+🕓 501(c)(3) status pending IRS approval (Form 1023 submitted)
 
-⚖️ Design Principles
-Proof of Contribution: Real-world assets (land, tractors, labor) yield DWC
-Staking = Skin in the Soil: Long-term commitment is rewarded
-Local-first: Governance, economy, and commerce are designed for bioregional resilience
-No Overlords: There is no central authority once DAOs are bootstrapped
+❌ We do not yet claim tax-deductible donation status
 
-🔐 Future Enhancements
-Zero-knowledge proof voting for private ballots
-AI assistant tools to help DAO founders create governance policies
-Reputation scoring for DAO leaders (based on transparency + yields)
-Dynamic yield schedules based on DAO performance metrics
+✅ All project funds and development are managed under Foodscape Visions 501(c)(3)
 
-🤝 Want to Help?
-Open an Issue or Discussion here on GitHub.
 
-We’re looking for help with:
-
-Python code cleanup
-Model integration
-Voice UX / personalities
-Config + storage solutions
-Foodscape Coin (FSC) launch on XRP Ledger
-Farm Coin creation within XRP Ledger and ARC APP
-DAO Coin Creation for qualified porjects
-Graphics UI for Mobile App (Flutter or cross platform)
-Donations to free up my time to work on this project full time!
-
+This repository and all related tools are being developed under that public-benefit mission
 
