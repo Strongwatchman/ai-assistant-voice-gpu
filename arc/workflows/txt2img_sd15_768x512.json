@@ -1,0 +1,24 @@
+{
+  "last_node_id": 8,
+  "last_link_id": 7,
+  "nodes": [
+    {"id":1,"type":"Load Checkpoint","pos":[50,60],
+     "widgets_values":["v1-5-pruned-emaonly.safetensors","fp16"]},
+    {"id":2,"type":"CLIP Text Encode (Prompt)","pos":[50,220],
+     "widgets_values":["cinematic greenhouse in the desert at sunset, volumetric light, detailed"]},
+    {"id":3,"type":"CLIP Text Encode (Prompt)","pos":[50,300],
+     "widgets_values":["lowres, blurry, worst quality, watermark, text"]},
+    {"id":4,"type":"KSampler","pos":[420,140],
+     "widgets_values":[20,7,0,"euler_a","normal",768,512,1.0]},
+    {"id":5,"type":"VAE Decode","pos":[720,160],"widgets_values":[]},
+    {"id":6,"type":"Save Image","pos":[940,160],"widgets_values":["ComfyUI_txt2img"]}
+  ],
+  "links": [
+    [1,1,0,4,0],
+    [2,1,1,4,1],
+    [3,1,2,4,2],
+    [4,4,0,5,0],
+    [5,1,3,5,1],
+    [6,5,0,6,0]
+  ]
+}

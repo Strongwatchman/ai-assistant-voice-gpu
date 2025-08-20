@@ -1,0 +1,35 @@
+from pathlib import Path
+import os
+from .tts_handler import get_xtts_model, speak_xtts_multispeaker
+
+_VOICE_FILE = Path.home() / ".config" / "arc" / "voice.txt"
+_DEFAULT_VOICE = "Abrahan Mack"  # your requested default
+
+def _current_voice() -> str:
+    # Priority: ARC_VOICE env > config file > default
+    env = os.environ.get("ARC_VOICE", "").strip()
+    if env:
+        return env
+    if _VOICE_FILE.exists():
+        try:
+            v = _VOICE_FILE.read_text(encoding="utf-8").strip()
+            if v:
+                return v
+        except Exception:
+            pass
+    return _DEFAULT_VOICE
+
+def get_current_voice() -> str:
+    """Public getter (kept for compatibility)."""
+    return _current_voice()
+
+def speak(text: str, voice: str | None = None):
+    """
+    Speak using XTTS multispeaker.
+    Always fetch the latest voice selection unless an explicit 'voice' is passed.
+    """
+    spk = (voice or _current_voice()).strip()
+    model = get_xtts_model()  # cached inside tts_handler
+    # NOTE: if you later want clone WAV routing, add a small mapping here.
+    print(f"🧠 [TTS] Using device for speech synthesis: {getattr(model, 'device', 'cuda')}")
+    speak_xtts_multispeaker(text, speaker=spk, model=model)

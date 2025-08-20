@@ -1,0 +1,26 @@
+import os
+from pathlib import Path
+from .tts_handler import get_xtts_model, speak_xtts_multispeaker
+
+VOICE_STORE = Path.home() / ".config" / "arc" / "voice.txt"
+
+def _get_current_voice() -> str:
+    v = os.environ.get("ARC_VOICE")
+    if v and v.strip():
+        return v.strip()
+    for p in (VOICE_STORE, Path.home() / "AI_Assistant" / "config" / "voice.txt"):
+        try:
+            if p.exists():
+                txt = p.read_text(encoding="utf-8").strip()
+                if txt:
+                    return txt
+        except:
+            pass
+    return "Asya Anara"
+
+def speak(text: str, voice: str | None = None):
+    """Synthesize & play TTS with XTTS (no out_path; matches tts_handler API)."""
+    voice = (voice or _get_current_voice()).strip()
+    model = get_xtts_model()  # cached; device selection handled inside
+    # arc/tts_handler.speak_xtts_multispeaker handles saving/playing internally
+    speak_xtts_multispeaker(text, speaker=voice, model=model)

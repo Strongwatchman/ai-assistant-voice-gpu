@@ -1,0 +1,266 @@
+# arc/main.py — VOICE-FIRST orchestration
+# Assistant on GPU0 (RTX 3050) by default; generation/animation on GPU1 (RTX 2060).
+# Set ASSISTANT_CUDA=cpu to free all VRAM for gen/anim.
+
+import os, sys, time, gc, threading, traceback, subprocess, shlex, glob
+# --- path+boot preamble ---
+from pathlib import Path as _P
+from pathlib import Path
+_PR = _P(__file__).resolve().parents[1]
+if str(_PR) not in sys.path:
+    sys.path.insert(0, str(_PR))
+try:
+    from arc.boot import patch_torch_for_xtts
+    patch_torch_for_xtts()
+except Exception as e:
+    print(f"[XTTS] boot shim unavailable: {e}")
+# --- end preamble ---
+def print_banner():
+    print('\n✅ Voice Assistant Ready.')
+    print('🔘 Press Enter to speak | T = type | H = help')
+    print('❌ Q to quit')
+    print('')
+
+# ---------- GPU/CPU pinning (configure BEFORE importing torch/whisper/tts) ----------
+os.environ.setdefault("CUDA_DEVICE_ORDER", "PCI_BUS_ID")
+
+ASSISTANT_CUDA = os.environ.get("ASSISTANT_CUDA", "0")   # "0" (3050) | "1" (2060) | "cpu"
+AVATAR_CUDA    = os.environ.get("AVATAR_CUDA",    "1")   # where SadTalker runs (default 2060)
+COMFY_URL      = os.environ.get("COMFY_URL", "http://127.0.0.1:8189")
+
+if ASSISTANT_CUDA.lower() == "cpu":
+    # Hide GPUs from this process; assistant will run CPU
+    os.environ["CUDA_VISIBLE_DEVICES"] = ""
+else:
+    # Expose only the selected GPU index to the assistant process
+    os.environ["CUDA_VISIBLE_DEVICES"] = ASSISTANT_CUDA
+
+# --------- lazy imports for assistant stack (after device pin) ----------
+def _lazy_import_assistant():
+    global record_audio, transcribe, load_settings, speak, route_prompt
+    global choose_model, choose_voice, test_voice, toggle_xtts_clone, init_xtts_model
+    from arc.audio import record_audio
+    from arc.transcriber import transcribe
+    from arc.config import load_settings
+    from arc.voice_handler import speak
+    from arc.arc_core import route_prompt
+    from arc.model_selector import choose_model
+    from arc.voice_selector import choose_voice, test_voice, toggle_xtts_clone
+    from arc.state import init_xtts_model
+    from arc.llm_handler import generate_response
+
+
+# --------- small utils ----------
+def clean_gpu_memory():
+    gc.collect()
+    try:
+        import torch
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except Exception:
+        pass
+
+def _auto_open(path: str):
+    try:
+        if path and (os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY")):
+            subprocess.Popen(["xdg-open", path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        pass
+
+def _latest(globpat: str):
+    files = sorted(glob.glob(globpat), key=os.path.getmtime, reverse=True)
+    return files[0] if files else None
+
+# --------- ComfyUI helpers (lazy) ----------
+def comfy_ping():
+    import urllib.request, json
+    try:
+        with urllib.request.urlopen(f"{COMFY_URL}/system_stats", timeout=2) as r:
+            _ = json.loads(r.read().decode("utf-8"))
+        return True
+    except Exception:
+        return False
+
+def _import_comfy_client():
+    """
+    Import only when needed; avoid import cost at startup.
+    """
+    try:
+        from arc.comfy_client import (
+            build_txt2img_prompt,
+            queue_and_wait,
+            txt2img_seed_walk_to_video,   # may be missing in your local file
+        )
+        return build_txt2img_prompt, queue_and_wait, txt2img_seed_walk_to_video
+    except ImportError:
+        # fallback without seed-walk if helper not present
+        from arc.comfy_client import build_txt2img_prompt, queue_and_wait
+        return build_txt2img_prompt, queue_and_wait, None
+
+def try_local_image_commands(query: str):
+    """
+    ComfyUI-only:
+      - 'make image <prompt>'   -> ComfyUI txt2img
+      - 'comfy image <prompt>'  -> same as above
+      - 'comfy video <prompt>'  -> seed-walk (if helper exists)
+    """
+    if not query: return False, ""
+
+    q = query.strip().lstrip("> ").strip()
+    low = q.lower()
+    need = (None if comfy_ping() else "❌ ComfyUI not on 8189. Start it on GPU1 (2060).")
+
+    if low.startswith("make image ") or low.startswith("comfy image "):
+        parts = q.split(" ", 2)
+        prompt = parts[2].strip() if len(parts) >= 3 else ""
+        if not prompt:
+            return True, "⚠️ Try: make image cinematic greenhouse at sunset"
+        if need: return True, need
+
+        build, queue, _seedwalk = _import_comfy_client()
+        try:
+            payload = build(prompt=prompt, width=768, height=512, steps=20)
+            outs = queue(payload)
+            if outs:
+                _auto_open(outs[0])
+                return True, f"🖼 ComfyUI saved → {outs[0]}"
+            return True, "⚠️ ComfyUI finished but returned no outputs."
+        except Exception as e:
+            return True, f"❌ Comfy image error: {e}"
+
+    if low.startswith("comfy video "):
+        from pathlib import Path
+        assets = assets or (Path.home() / "AI_Assistant" / "assets")
+        prompt = q[len("comfy video "):].strip()
+        if not prompt:
+            return True, "⚠️ Try: comfy video a surreal greenhouse timelapse"
+        if need: return True, need
+
+        build, queue, seedwalk = _import_comfy_client()
+        if seedwalk is None:
+            return True, "⚠️ Seed-walk helper not installed in arc/comfy_client.py."
+        try:
+            mp4, frames_dir = seedwalk(
+                prompt=prompt,
+                seconds=8, fps=12,
+                width=640, height=448,
+                steps=20, cfg=7.0, sampler="euler", scheduler="normal",
+                seed_start=int(time.time()) % 100000, out_name="seedwalk"
+            )
+            _auto_open(mp4)
+            return True, f"🎞 ComfyUI video → {mp4}\n🗂 Frames: {frames_dir}"
+        except Exception as e:
+            return True, f"❌ Comfy seed-walk error: {e}"
+
+    return False, ""
+
+# --------- SadTalker (avatar) on GPU1 by default ----------
+def run_sadtalker(source_image, driven_audio,
+                  result_dir="outputs_avatar",
+                  enhancer="gfpgan",
+                  preprocess="full",
+                  still=True):
+    """
+    Launches SadTalker in its OWN venv/process on AVATAR_CUDA (default GPU1 = 2060).
+    Returns (ok, message, mp4_path|None)
+    """
+    root = Path.home() / "AI_Assistant"
+    py = root / "venv_sadtalker" / "bin" / "python"
+    script = root / "SadTalker" / "inference.py"
+
+    if not py.exists():
+        return False, f"SadTalker venv not found: {py}", None
+    if not script.exists():
+        return False, f"SadTalker not installed at: {script}", None
+    if not Path(source_image).exists():
+        return False, f"Source image not found: {source_image}", None
+    if not Path(driven_audio).exists():
+        return False, f"Audio not found: {driven_audio}", None
+
+    cmd = [
+        str(py), str(script),
+        "--driven_audio", str(driven_audio),
+        "--source_image", str(source_image),
+        "--preprocess", preprocess,
+        "--result_dir", result_dir
+    ]
+    if still: cmd.append("--still")
+    if enhancer and enhancer.lower() != "none":
+        cmd.extend(["--enhancer", enhancer])
+
+    env = os.environ.copy()
+    env["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+    env["CUDA_VISIBLE_DEVICES"] = AVATAR_CUDA
+    env.setdefault("OMP_NUM_THREADS", "4")
+
+    print(f"🎬 SadTalker: {' '.join(shlex.quote(x) for x in cmd)}")
+    print(f"     CUDA_VISIBLE_DEVICES={env['CUDA_VISIBLE_DEVICES']}")
+    proc = subprocess.run(cmd, env=env, cwd=str(script.parent),
+                          stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                          text=True, check=False)
+    print(proc.stdout)
+
+    mp4 = _latest(f"{result_dir}/**/*.mp4")
+    if proc.returncode == 0 and mp4:
+        return True, f"Avatar video → {mp4}", mp4
+    return False, "SadTalker failed (OOM or model error). Try closing ComfyUI, using --enhancer none, or smaller portrait.", None
+
+def try_avatar_commands(query: str):
+    """Legacy avatar CLI disabled; animation now handled by the avatar toggle."""
+    return False, ""
+
+def initialize():
+    _lazy_import_assistant()
+    print("🧹 Initializing assistant (voice-first)…")
+    clean_gpu_memory()
+    try:
+        init_xtts_model()
+    except Exception:
+        pass
+    print(f"\n✅ Ready. Assistant device = {ASSISTANT_CUDA}")
+    print("🔘 Press Enter to speak | 't' type | 'c' choose voice | 'x' toggle XTTS | 'v' test voice | 'm' choose LLM")
+    print("🖼  Image:  make image <prompt>   |   comfy image <prompt>")
+    print("🎞  Video:  comfy video <prompt>  (seed-walk b-roll)")
+    print("❌ 'q' to quit\n")
+
+def handle_user_input(user_input: str):
+    ui = user_input.strip()
+    if ui.lower() == 'q':
+        print('👋 Exiting.'); return False, None
+    if ui.lower() == 't':
+        return True, input('📝 Type your message: ')
+    if ui.lower() == 'c':
+        from arc.voice_selector import choose_voice; choose_voice(); return True, None
+    if ui.lower() == 'v':
+        from arc.voice_selector import test_voice; test_voice(); return True, None
+    if ui.lower() == 'x':
+        from arc.voice_selector import toggle_xtts_clone; toggle_xtts_clone(); return True, None
+    if ui.lower() == 'a':
+        toggle_avatar(); return True, None
+    if ui.lower() == 'm':
+        from arc.model_selector import choose_model; choose_model(); return True, None
+    if ui == '':
+        from arc.audio import record_audio
+        from arc.transcriber import transcribe
+        record_audio('input.wav')
+        try:
+            return True, transcribe('input.wav')
+        except Exception as e:
+            print(f'❌ Transcription failed: {e}')
+            return True, None
+    return True, ui
+
+
+AVATAR_ENABLED = globals().get('AVATAR_ENABLED', False)
+def toggle_avatar():
+    global AVATAR_ENABLED
+    AVATAR_ENABLED = not AVATAR_ENABLED
+    print(f"🎛  Animate: {'ON' if AVATAR_ENABLED else 'OFF'} | Enhancer: gfpgan")
+
+if __name__ == '__main__':
+    try:
+        print_banner()
+        assistant_loop()
+    except Exception:
+        print('\n❌ Critical failure:')
+        import traceback; traceback.print_exc()

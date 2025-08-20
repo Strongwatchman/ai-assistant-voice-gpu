@@ -1,0 +1,186 @@
+{
+  "last_node_id": 12,
+  "last_link_id": 0,
+  "nodes": [
+    {
+      "id": 4,
+      "type": "CheckpointLoaderSimple",
+      "pos": [60, 60],
+      "size": [360, 72],
+      "inputs": {},
+      "outputs": [
+        {"name":"MODEL","type":"MODEL"},
+        {"name":"CLIP","type":"CLIP"},
+        {"name":"VAE","type":"VAE"}
+      ],
+      "properties": {},
+      "widgets_values": {
+        "ckpt_name": "Deliberate_v6.safetensors"
+      }
+    },
+    {
+      "id": 10,
+      "type": "LoraLoader",
+      "pos": [460, 45],
+      "size": [340, 100],
+      "inputs": {
+        "model": {"link": 0, "name": "MODEL"},
+        "clip":  {"link": 1, "name": "CLIP"}
+      },
+      "outputs": [
+        {"name":"MODEL","type":"MODEL"},
+        {"name":"CLIP","type":"CLIP"}
+      ],
+      "properties": {},
+      "widgets_values": {
+        "lora_name": "NaturalBodyV2.0.safetensors",
+        "strength_model": 0.60,
+        "strength_clip": 0.60
+      }
+    },
+    {
+      "id": 11,
+      "type": "LoraLoader",
+      "pos": [840, 45],
+      "size": [340, 100],
+      "inputs": {
+        "model": {"link": 2, "name": "MODEL"},
+        "clip":  {"link": 3, "name": "CLIP"}
+      },
+      "outputs": [
+        {"name":"MODEL","type":"MODEL"},
+        {"name":"CLIP","type":"CLIP"}
+      ],
+      "properties": {},
+      "widgets_values": {
+        "lora_name": "PerfectEyesXL.safetensors",
+        "strength_model": 0.60,
+        "strength_clip": 0.60
+      }
+    },
+    {
+      "id": 12,
+      "type": "LoraLoader",
+      "pos": [1220, 45],
+      "size": [340, 100],
+      "inputs": {
+        "model": {"link": 4, "name": "MODEL"},
+        "clip":  {"link": 5, "name": "CLIP"}
+      },
+      "outputs": [
+        {"name":"MODEL","type":"MODEL"},
+        {"name":"CLIP","type":"CLIP"}
+      ],
+      "properties": {},
+      "widgets_values": {
+        "lora_name": "HandFixer_pdxl_lncrs_v1.safetensors",
+        "strength_model": 0.50,
+        "strength_clip": 0.50
+      }
+    },
+    {
+      "id": 5,
+      "type": "CLIPTextEncode",
+      "pos": [460, 180],
+      "size": [360, 120],
+      "inputs": { "clip": {"link": 7, "name": "CLIP"} },
+      "outputs": [{ "name":"CONDITIONING","type":"CONDITIONING"}],
+      "properties": {},
+      "widgets_values": {
+        "text": "photorealistic portrait, natural skin texture, 85mm lens, catchlights, sharp eyes, cinematic grading, subtle expression"
+      }
+    },
+    {
+      "id": 6,
+      "type": "CLIPTextEncode",
+      "pos": [460, 330],
+      "size": [360, 120],
+      "inputs": { "clip": {"link": 8, "name": "CLIP"} },
+      "outputs": [{ "name":"CONDITIONING","type":"CONDITIONING"}],
+      "properties": {},
+      "widgets_values": {
+        "text": "lowres, blurry, watermark, text, deformed hands, extra fingers, malformed anatomy, overprocessed skin"
+      }
+    },
+    {
+      "id": 7,
+      "type": "EmptyLatentImage",
+      "pos": [460, 510],
+      "size": [300, 120],
+      "inputs": {},
+      "outputs": [{ "name":"LATENT","type":"LATENT"}],
+      "properties": {},
+      "widgets_values": {
+        "width": 576,
+        "height": 832,
+        "batch_size": 1
+      }
+    },
+    {
+      "id": 3,
+      "type": "KSampler",
+      "pos": [840, 510],
+      "size": [360, 180],
+      "inputs": {
+        "model":        {"link": 6,  "name": "MODEL"},
+        "positive":     {"link": 9,  "name": "CONDITIONING"},
+        "negative":     {"link": 10, "name": "CONDITIONING"},
+        "latent_image": {"link": 11, "name": "LATENT"}
+      },
+      "outputs": [{ "name":"LATENT","type":"LATENT"}],
+      "properties": {},
+      "widgets_values": {
+        "seed": 12345,
+        "steps": 26,
+        "cfg": 6.5,
+        "sampler_name": "euler",
+        "scheduler": "normal",
+        "denoise": 1.0
+      }
+    },
+    {
+      "id": 8,
+      "type": "VAEDecodeTiled",
+      "pos": [1220, 510],
+      "size": [360, 160],
+      "inputs": {
+        "samples": {"link": 12, "name": "LATENT"},
+        "vae":     {"link": 13, "name": "VAE"}
+      },
+      "outputs": [{ "name":"IMAGE","type":"IMAGE"}],
+      "properties": {},
+      "widgets_values": {
+        "tile_size": 256,
+        "overlap": 32,
+        "temporal_size": 64,
+        "temporal_overlap": 8,
+        "fast_decoder": true,
+        "fp16": true
+      }
+    },
+    {
+      "id": 9,
+      "type": "SaveImage",
+      "pos": [1600, 510],
+      "size": [320, 120],
+      "inputs": { "images": {"link": 14, "name": "IMAGE"} },
+      "outputs": [],
+      "properties": {},
+      "widgets_values": {
+        "filename_prefix": "realistic_portrait/realistic_portrait"
+      }
+    }
+  ],
+  "links": [
+    [0, 4, 0, 10, 0],   [1, 4, 1, 10, 1],
+    [2,10, 0, 11, 0],   [3,10, 1, 11, 1],
+    [4,11, 0, 12, 0],   [5,11, 1, 12, 1],
+    [6,12, 0,  3, 0],   [7,12, 1,  5, 0],
+    [8,12, 1,  6, 0],   [9, 5, 0,  3, 1],
+    [10,6, 0,  3, 2],   [11,7, 0,  3, 3],
+    [12,3, 0,  8, 0],   [13,4, 2,  8, 1],
+    [14,8, 0,  9, 0]
+  ],
+  "groups": [],
+  "config": {}
+}
