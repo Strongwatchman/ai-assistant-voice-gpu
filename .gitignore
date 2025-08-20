@@ -83,3 +83,11 @@ attic/
 *.old
 *.orig
 
+*.pyc
+backups/
+audio/*.wav
+output*/
+outputs*/
+benv*/
+whisper/
+models/**/*.safetensors
