@@ -1,27 +1,85 @@
-# Virtual environment
-venv310/
+# Python
 __pycache__/
-
-# Audio & model artifacts
-*.wav
-*.pt
-*.gguf
+*.py[cod]
+*.pyo
+*.pyd
+*.egg-info/
 *.log
 
-# Model and build folders
+# Envs
+.env
+.venv
+venv*/
+venv*/
+venv_*/
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Build / local binaries
+build/
+dist/
+bin/
+*.out
+*.exe
+
+# Audio / media / temp artifacts
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.mp4
+*.mkv
+*.avi
+*.gif
+*.webm
+tts_output/
+outputs/
+output/
+samples/
+audio/
+tmp/
+temp/
+*.tmp
+*.partial
+
+# Models & huge assets
+*.gguf
+*.pt
+*.safetensors
+*.onnx
+*.ckpt
 models/
+llama.cpp/models/*.gguf
+llama.cpp/models/ggml-vocab/
+SadTalker/checkpoints/
+ComfyUI/models/
+stable-diffusion-webui/models/
+
+# llama.cpp build
 llama.cpp/build/
 
-# Large or irrelevant files
-*.zip
-*.tar.xz
+# Local runtime/config
+.cache/
+.config/
+*.db
+*.sqlite
+*.jsonl
+
+# Logs
+logs/
+
+# Legacy / backups / working copies
+_legacy/
+attic/
+*Working Copy*.py
+*working copy*.py
+*_backup*.py
+*backup*.py
 *.bak
-*.OLD
-cudnn-*/
-Discriminator/
-Processing/
-Real-time/
-Saving/
-Text/
-Text:/
-.selected_model
+*.old
+*.orig
+
