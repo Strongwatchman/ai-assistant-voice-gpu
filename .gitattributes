@@ -1,0 +1,9 @@
+# Auto-normalize line endings
+* text=auto
+
+*.sh text eol=lf
+*.json text eol=lf
+*.py   text eol=lf
+
+attic/* linguist-vendored
+
