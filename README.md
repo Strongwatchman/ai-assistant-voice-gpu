@@ -33,3 +33,4 @@ cd ai-assistant-voice-gpu
 python3 -m venv venv310
 source venv310/bin/activate
 pip install -r requirements.txt
+- Copy webapp/.env.example to webapp/.env.local and set NEXT_PUBLIC_API_BASE
