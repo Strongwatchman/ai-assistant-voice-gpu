@@ -83,11 +83,66 @@ attic/
 *.old
 *.orig
 
-*.pyc
-backups/
-audio/*.wav
-output*/
-outputs*/
-benv*/
-whisper/
-models/**/*.safetensors
+# Ignore EXTRAS scratch space
+EXTRAS/
+arc/EXTRAS*/
+
+# Ignore old backup and working-copy files
+*.bak*
+*working copy*.py
+*Working Copy*.py
+
+# ==== scratch / backups ====
+EXTRAS/
+arc/EXTRAS*/
+arc/EXTRAS in ARC*
+*.bak*
+*working copy*.py
+*Working Copy*.py
+
+
+
+# Python
+venv*/ 
+.venv/
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.ipynb_checkpoints/
+.dist/
+build/
+.eggs/
+*.egg-info/
+
+# Node / Next.js
+webapp/node_modules/
+webapp/.next/
+webapp/.cache/
+webapp/.vercel/
+webapp/.turbo/
+
+# OS/IDE
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Model & audio blobs (keep repo lean)
+**/*.gguf
+**/*.safetensors
+**/*.onnx
+**/*.bin
+**/*.pt
+**/*.pth
+**/*.ckpt
+**/*.npy
+**/*.npz
+**/*.wav
+**/*.mp3
+**/*.flac
+**/tts_models/
+**/.models/
+**/.cache/
