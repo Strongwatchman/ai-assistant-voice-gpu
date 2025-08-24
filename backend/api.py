@@ -2,13 +2,12 @@
 from __future__ import annotations
 import os
 import io
-import re
 import json
 import inspect
 import shutil
 import tempfile
 import subprocess
-from typing import Optional, Any, Callable
+from typing import Optional, Any, Callable, List
 
 from fastapi import FastAPI, UploadFile, File, Form, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,17 +17,10 @@ from pydantic import BaseModel
 # ── ARC imports
 from arc.model_selector import list_active_keys, set_selected_key
 from arc.model_registry import MODEL_CONFIGS
-
-# voices list and clone mapping from your repo
-from arc.voice_selector import available_speakers, custom_voice_wavs  # <- we use this
-try:
-    from arc.voice_handler import set_current_voice as arc_set_current_voice  # (unused; upstream ensure_dir bug)
-except Exception:
-    arc_set_current_voice = None
-
+from arc.voice_selector import available_speakers
 from arc.config import load_settings, save_settings
 
-# LLM & STT
+# LLM entry points
 try:
     from arc.llm_handler import generate_response as arc_generate
 except Exception:
@@ -38,6 +30,7 @@ try:
 except Exception:
     arc_route_prompt = None
 
+# STT entry points
 try:
     import arc.stt_handler as stt_mod
 except Exception:
@@ -47,35 +40,20 @@ try:
 except Exception:
     trans_mod = None
 
-# Optional TTS wrappers (kept as fallbacks)
+# TTS entry points (primary → fallbacks)
 try:
-    import arc.tts_adapter as tts_adapter
+    import arc.tts_adapter as tts_adapter  # preferred (XTTS wrapper returning bytes)
 except Exception:
     tts_adapter = None
 try:
-    import arc.voice_handler as voice_mod
+    import arc.voice_handler as voice_mod   # may expose *bytes* APIs in your tree
 except Exception:
     voice_mod = None
 try:
-    import arc.tts as tts_mod
+    import arc.tts as tts_mod               # alternate module some repos provide
 except Exception:
     tts_mod = None
 
-# Direct Coqui XTTS (PRIMARY path)
-try:
-    from TTS.api import TTS as COQUI_TTS
-except Exception:
-    COQUI_TTS = None  # type: ignore
-
-try:
-    import torch  # for device selection
-except Exception:
-    torch = None  # type: ignore
-
-COQUI_MODEL = None
-COQUI_DEVICE = "cuda" if (torch and hasattr(torch, "cuda") and torch.cuda.is_available()) else "cpu"
-
-# ────────────────────────────────────────────────────────────────────────────────
 app = FastAPI(title="ARC Web Bridge API")
 
 # CORS
@@ -131,27 +109,13 @@ def _wav_to_mp3_bytes(wav_path: str) -> bytes:
         mp3_path = mp3f.name
     try:
         cmd = [ffmpeg, "-y", "-hide_banner", "-loglevel", "error",
-               "-i", wav_path, "-codec:a", "libmp3lame", "-b:a", "192k", mp3_path]
+               "-i", wav_path, "-codec:a", "libmp3lame", "-b:a", "160k", mp3_path]
         subprocess.run(cmd, check=True)
         with open(mp3_path, "rb") as fh:
             return fh.read()
     finally:
         try: os.unlink(mp3_path)
         except: pass
-
-def _slug(s: str) -> str:
-    s = (s or "").strip().lower()
-    s = re.sub(r"[^a-z0-9]+", "_", s)
-    return re.sub(r"_+", "_", s).strip("_")
-
-def _norm_lang(code: Optional[str]) -> str:
-    if not code or code.lower() == "auto":
-        return "en"
-    # reduce things like en-US -> en
-    return code.split("-")[0].lower()
-
-# ────────────────────────────────────────────────────────────────────────────────
-# STT adaptor
 
 def _call_transcriber(func: Callable[..., Any], path_or_bytes: Any, lang: Optional[str]) -> Optional[str]:
     try:
@@ -163,18 +127,16 @@ def _call_transcriber(func: Callable[..., Any], path_or_bytes: Any, lang: Option
             args.append(path_or_bytes)
         else:
             return None
-        accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
-        if len(params) >= 2 and params[1].name.lower() in ("language", "lang") and lang:
-            args.append(lang)
+        if len(params) >= 2:
+            name = params[1].name.lower()
+            if name in ("language", "lang") and lang:
+                args.append(lang)
         else:
             for p in params:
                 n = p.name.lower()
                 if n in ("language", "lang") and lang:
                     kwargs[n] = lang
                     break
-            else:
-                if accepts_kwargs and lang:
-                    kwargs["language"] = lang
         out = func(*args, **kwargs)
         if isinstance(out, tuple) and out:
             return str(out[0] or "")
@@ -183,223 +145,70 @@ def _call_transcriber(func: Callable[..., Any], path_or_bytes: Any, lang: Option
         print(f"STT call failed for {getattr(func, '__name__', func)}: {e}")
         return None
 
-# ────────────────────────────────────────────────────────────────────────────────
-# TTS — PRIMARY: Coqui XTTS directly
-
-def _ensure_coqui_loaded():
-    global COQUI_MODEL
-    if COQUI_MODEL is not None:
-        return
-    if COQUI_TTS is None:
-        return
-    model_name = "tts_models/multilingual/multi-dataset/xtts_v2"
-    print(f"🔊 Loading Coqui XTTS on [{COQUI_DEVICE}] …")
-    COQUI_MODEL = COQUI_TTS(model_name)
-    try:
-        COQUI_MODEL.to(COQUI_DEVICE)
-    except Exception:
-        # Some CPU-only builds ignore .to(); safe to continue
-        pass
-
-def _xtts_synthesize_wav_bytes(text: str, voice: Optional[str], language: str) -> Optional[bytes]:
-    """
-    Use Coqui XTTS directly. If 'voice' matches your multispeaker list,
-    call with speaker=voice. If 'voice' is in custom_voice_wavs, call with speaker_wav=...
-    Returns raw WAV bytes.
-    """
-    _ensure_coqui_loaded()
-    if COQUI_MODEL is None:
+def _normalize_bytes_result(out: Any) -> Optional[bytes]:
+    if out is None:
         return None
-
-    # Normalize language to short form like "en"
-    lang = _norm_lang(language)
-
-    # temp path for WAV
-    fd, out_wav = tempfile.mkstemp(suffix=".wav"); os.close(fd)
-    try:
-        # Clone?
-        if voice and voice in custom_voice_wavs:
-            ref = custom_voice_wavs[voice]
-            if not os.path.exists(ref):
-                print(f"❌ Missing reference sample for clone: {ref}")
-                return None
-            COQUI_MODEL.tts_to_file(text=text, speaker_wav=ref, language=lang, file_path=out_wav)
-        else:
-            # Multispeaker
-            spk = voice if (voice and voice in available_speakers) else None
-            # If unknown voice, Coqui will still synthesize with default voice if speaker=None
-            COQUI_MODEL.tts_to_file(text=text, speaker=spk, language=lang, file_path=out_wav)
-
-        with open(out_wav, "rb") as fh:
+    if isinstance(out, (bytes, bytearray)):
+        return bytes(out)
+    if isinstance(out, str) and os.path.exists(out):
+        with open(out, "rb") as fh:
             return fh.read()
-    finally:
-        try: os.unlink(out_wav)
-        except: pass
-
-# ────────────────────────────────────────────────────────────────────────────────
-# TTS — FALLBACKS (adapter / voice_handler / tts / pyttsx3)
-
-def _try_call_variants(f: Callable[..., Any], variants: list[tuple[tuple[Any, ...], dict]]) -> Optional[bytes]:
-    for args, kwargs in variants:
-        try:
-            out = f(*args, **kwargs)
-            if isinstance(out, (bytes, bytearray)):
-                return bytes(out)
-            if isinstance(out, str) and os.path.exists(out):
-                with open(out, "rb") as fh:
+    if isinstance(out, dict):
+        for k in ("wav", "audio", "bytes", "data"):
+            v = out.get(k)
+            if isinstance(v, (bytes, bytearray)):
+                return bytes(v)
+        for k in ("path", "file", "filename"):
+            v = out.get(k)
+            if isinstance(v, str) and os.path.exists(v):
+                with open(v, "rb") as fh:
                     return fh.read()
-            if isinstance(out, dict):
-                for k in ("wav", "audio", "bytes", "data"):
-                    if k in out and isinstance(out[k], (bytes, bytearray)):
-                        return bytes(out[k])
-                for k in ("path", "file", "filename"):
-                    if k in out and isinstance(out[k], str) and os.path.exists(out[k]):
-                        with open(out[k], "rb") as fh:
-                            return fh.read()
-        except TypeError:
-            continue
-        except Exception as e:
-            print(f"TTS call variant failed: {e}")
-            continue
     return None
 
-def _call_tts_bytes(func: Callable[..., Any], text: str, voice: Optional[str],
-                    language: Optional[str], fmt: Optional[str]) -> Optional[bytes]:
-    # Signature-driven attempt
-    try:
-        sig = inspect.signature(func)
-        params = list(sig.parameters.values())
-        pnames = [p.name.lower() for p in params]
-        accepts_kwargs = any(p.kind == inspect.Parameter.VAR_KEYWORD for p in params)
-        args: list[Any] = []
-        kwargs: dict[str, Any] = {}
-        v_val = voice or ""
-        v_slug = _slug(v_val) if v_val else ""
-        l_val = (language or "").strip()
-        f_val = fmt or "wav"
+def _try_tts_calls(func: Callable[..., Any], text: str, voice: Optional[str], lang: Optional[str]) -> Optional[bytes]:
+    """
+    Be aggressive: try many combinations so we satisfy wrappers that hide params.
+    """
+    trials: List[dict] = []
 
-        voice_keys = ("voice", "speaker", "speaker_id", "spk", "name")
-        lang_keys  = ("language", "lang", "locale")
-        fmt_keys   = ("format", "fmt", "output_format", "audio_format")
+    # positional combos
+    if voice is not None and lang is not None:
+        trials.append({"args": (text, voice, lang), "kwargs": {}})
+    if voice is not None:
+        trials.append({"args": (text, voice), "kwargs": {}})
+    if lang is not None:
+        trials.append({"args": (text, lang), "kwargs": {}})
 
-        for p in params:
-            n = p.name.lower()
-            if p.kind in (inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD):
-                if n == "text": args.append(text); continue
-                if n in voice_keys and v_val: args.append(v_val); continue
-                if n in lang_keys and l_val: args.append(l_val); continue
-                if n in fmt_keys and f_val: args.append(f_val); continue
+    # keyword combos (common names)
+    kw_langs = ["language", "lang"]
+    kw_voices = ["voice", "speaker", "speaker_id", "spk", "name"]
 
-        given_names = {params[i].name.lower() for i in range(min(len(args), len(params)))}
-        for p in params:
-            n = p.name.lower()
-            if n in given_names: continue
-            if p.kind in (inspect.Parameter.KEYWORD_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD):
-                if n == "text": kwargs["text"] = text
-                elif n in voice_keys and v_val: kwargs[n] = v_val
-                elif n in lang_keys and l_val: kwargs[n] = l_val
-                elif n in fmt_keys and f_val: kwargs[n] = f_val
+    # both
+    for kl in kw_langs:
+        for kv in kw_voices:
+            trials.append({"args": (text,), "kwargs": {kl: lang, kv: voice}})
+    # language only
+    for kl in kw_langs:
+        trials.append({"args": (text,), "kwargs": {kl: lang}})
+    # voice only
+    for kv in kw_voices:
+        trials.append({"args": (text,), "kwargs": {kv: voice}})
 
-        if accepts_kwargs:
-            if v_val and "voice" not in kwargs and all(k not in given_names for k in voice_keys):
-                kwargs["voice"] = v_val
-                kwargs.setdefault("speaker", v_slug or v_val)
-            if l_val and "language" not in kwargs and all(k not in given_names for k in lang_keys):
-                kwargs["language"] = l_val
-            if f_val and "format" not in kwargs and all(k not in given_names for k in fmt_keys):
-                kwargs["format"] = f_val
+    # last resort
+    trials.append({"args": (text,), "kwargs": {}})
 
-        out = func(*args, **kwargs)
-        if isinstance(out, (bytes, bytearray)):
-            return bytes(out)
-        if isinstance(out, str) and os.path.exists(out):
-            with open(out, "rb") as fh:
-                return fh.read()
-        if isinstance(out, dict):
-            for k in ("wav", "audio", "bytes", "data"):
-                if k in out and isinstance(out[k], (bytes, bytearray)):
-                    return bytes(out[k])
-            for k in ("path", "file", "filename"):
-                if k in out and isinstance(out[k], str) and os.path.exists(out[k]):
-                    with open(out[k], "rb") as fh:
-                        return fh.read()
-    except Exception as e:
-        print(f"TTS call (signature path) failed: {e}")
-
-    # Brute-force positional combos
-    v_val = voice or ""
-    v_slug = _slug(v_val) if v_val else ""
-    l_val = (language or "").strip()
-    combos = [
-        ((text, v_val,   l_val), {}),
-        ((text, v_slug,  l_val), {}),
-        ((text, l_val,   v_val), {}),
-        ((text, l_val,   v_slug), {}),
-        ((text, v_val), {"language": l_val}),
-        ((text, v_slug), {"language": l_val}),
-        ((text,), {"voice": v_val, "language": l_val}),
-        ((text,), {"speaker": v_slug or v_val, "language": l_val}),
-        ((text,), {"language": l_val}),
-    ]
-    return _try_call_variants(func, combos)
-
-def _synthesize_to_wav_bytes(text: str, voice: Optional[str], language: Optional[str]) -> Optional[bytes]:
-    # 0) Coqui XTTS (direct)
-    wav = _xtts_synthesize_wav_bytes(text, voice, _norm_lang(language or "en"))
-    if wav:
-        return wav
-
-    # 1) arc.tts_adapter
-    if tts_adapter and hasattr(tts_adapter, "synthesize_bytes"):
+    last_err = None
+    for t in trials:
         try:
-            b = _call_tts_bytes(tts_adapter.synthesize_bytes, text, voice, language or "en", "wav")
+            out = func(*t["args"], **t["kwargs"])
+            b = _normalize_bytes_result(out)
             if b:
                 return b
         except Exception as e:
-            print(f"tts_adapter failed: {e}")
-
-    # 2) voice_handler
-    if voice_mod:
-        for name in ("tts_bytes", "speak_bytes", "synthesize_bytes", "speak_wav", "synthesize_wav"):
-            if hasattr(voice_mod, name):
-                b = _call_tts_bytes(getattr(voice_mod, name), text, voice, language or "en", "wav")
-                if b:
-                    return b
-
-    # 3) tts module
-    if tts_mod:
-        for name in ("tts_bytes", "speak_bytes", "synthesize_bytes", "speak_wav", "synthesize_wav"):
-            if hasattr(tts_mod, name):
-                b = _call_tts_bytes(getattr(tts_mod, name), text, voice, language or "en", "wav")
-                if b:
-                    return b
-
-    # 4) Optional pyttsx3 fallback (if present)
-    try:
-        import importlib.util
-        if importlib.util.find_spec("pyttsx3") is not None:
-            import pyttsx3  # type: ignore
-            engine = pyttsx3.init()
-            try:
-                if voice:
-                    for v in engine.getProperty("voices") or []:
-                        if voice.lower() in (v.name or "").lower():
-                            engine.setProperty("voice", v.id)
-                            break
-            except Exception:
-                pass
-            fd, out_wav = tempfile.mkstemp(suffix=".wav"); os.close(fd)
-            try:
-                engine.save_to_file(text, out_wav)
-                engine.runAndWait()
-                with open(out_wav, "rb") as fh:
-                    return fh.read()
-            finally:
-                try: os.unlink(out_wav)
-                except: pass
-    except Exception as e:
-        print(f"pyttsx3 fallback failed: {e}")
-
+            last_err = e
+            continue
+    if last_err:
+        print(f"TTS call variants exhausted; last error: {last_err}")
     return None
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -428,7 +237,7 @@ def http_voices() -> dict:
     return {"voices": available_speakers}
 
 # ────────────────────────────────────────────────────────────────────────────────
-# Settings
+# Server defaults
 
 class SettingsIn(BaseModel):
     model: Optional[str] = None
@@ -447,6 +256,9 @@ def _apply_selected_model(model_key: Optional[str]) -> None:
             print(f"⚠️ set_selected_key failed: {e}")
 
 def _apply_selected_voice(voice_id: Optional[str]) -> None:
+    """
+    Remember chosen voice without calling ARC's set_current_voice (older ensure_dir).
+    """
     if not voice_id:
         return
     os.environ["ARC_VOICE"] = voice_id
@@ -470,6 +282,8 @@ def http_save_settings(s: SettingsIn) -> dict:
     if s.sttLanguage is not None:
         cur["sttLanguage"] = s.sttLanguage
         os.environ["WHISPER_LANG"] = "" if s.sttLanguage == "auto" else s.sttLanguage
+        if s.sttLanguage and s.sttLanguage != "auto":
+            os.environ["ARC_TTS_LANG"] = s.sttLanguage
     save_settings(cur)
     return {"ok": True, **cur}
 
@@ -486,8 +300,9 @@ async def chat(req: Request, body: ChatIn) -> dict:
     if not text:
         raise HTTPException(status_code=400, detail="Missing 'text'.")
 
-    hdr_model = req.headers.get("x-model")
-    hdr_voice = req.headers.get("x-voice")
+    hdr_model = (req.headers.get("x-model") or "").strip()
+    hdr_voice = (req.headers.get("x-voice") or "").strip()
+
     if hdr_model:
         _apply_selected_model(hdr_model)
     if hdr_voice:
@@ -508,6 +323,7 @@ async def chat(req: Request, body: ChatIn) -> dict:
 
     if isinstance(reply, (dict, list)):
         reply = json.dumps(reply, ensure_ascii=False)
+
     return {"text": str(reply)}
 
 # ────────────────────────────────────────────────────────────────────────────────
@@ -525,7 +341,8 @@ async def stt(
     if not up:
         raise HTTPException(status_code=400, detail="No audio uploaded (file|audio|audio_file).")
 
-    lang = (language or os.environ.get("WHISPER_LANG") or "").strip() or None
+    lang_env = (os.environ.get("WHISPER_LANG") or "").strip() or None
+    lang = (language or lang_env) or None
     data = await up.read()
     if not data:
         raise HTTPException(status_code=400, detail="Empty audio upload.")
@@ -569,7 +386,7 @@ async def stt(
             except: pass
 
 # ────────────────────────────────────────────────────────────────────────────────
-# TTS
+# TTS (language-aware, robust argument passing)
 
 class TTSIn(BaseModel):
     text: str
@@ -577,36 +394,85 @@ class TTSIn(BaseModel):
     language: Optional[str] = None
     format: Optional[str] = "mp3"  # "mp3" or "wav"
 
+def _synthesize_to_wav_bytes(text: str, voice: Optional[str], lang: Optional[str]) -> Optional[bytes]:
+    """
+    Order:
+      1) arc.tts_adapter.*   (preferred)
+      2) arc.voice_handler.* / arc.tts.*
+      3) pyttsx3 fallback (if installed)
+    We attempt many signatures so the `language` always reaches XTTS.
+    """
+    # 1) tts_adapter (most likely in your setup)
+    if tts_adapter:
+        for name in ("synthesize_bytes", "tts_bytes", "speak_bytes", "synthesize_wav", "speak_wav"):
+            if hasattr(tts_adapter, name):
+                b = _try_tts_calls(getattr(tts_adapter, name), text, voice, lang)
+                if b:
+                    return b
+
+    # 2) voice_handler / tts
+    for mod in (voice_mod, tts_mod):
+        if not mod:
+            continue
+        for name in ("tts_bytes", "speak_bytes", "synthesize_bytes", "speak_wav", "synthesize_wav"):
+            if hasattr(mod, name):
+                b = _try_tts_calls(getattr(mod, name), text, voice, lang)
+                if b:
+                    return b
+
+    # 3) pyttsx3 fallback (robotic, but keeps UX alive)
+    try:
+        import pyttsx3  # type: ignore
+        engine = pyttsx3.init()
+        try:
+            if voice:
+                for v in engine.getProperty("voices") or []:
+                    if voice.lower() in (v.name or "").lower():
+                        engine.setProperty("voice", v.id)
+                        break
+        except Exception:
+            pass
+        fd, out_wav = tempfile.mkstemp(suffix=".wav"); os.close(fd)
+        try:
+            engine.save_to_file(text, out_wav)
+            engine.runAndWait()
+            with open(out_wav, "rb") as fh:
+                return fh.read()
+        finally:
+            try: os.unlink(out_wav)
+            except: pass
+    except Exception as e:
+        print(f"pyttsx3 fallback failed: {e}")
+
+    return None
+
 @app.post("/tts")
 async def tts(req: Request, body: TTSIn):
     text = (body.text or "").strip()
     if not text:
         raise HTTPException(status_code=400, detail="Missing 'text'.")
 
-    # Voice from header > JSON > settings > env
-    hdr_voice = req.headers.get("x-voice")
-    voice = hdr_voice or (body.voice or "").strip() or load_settings().get("voice") or os.environ.get("ARC_VOICE")
+    hdr_voice = (req.headers.get("x-voice") or "").strip()
+    voice = (body.voice or "").strip() or hdr_voice or load_settings().get("voice") or os.environ.get("ARC_VOICE")
     if voice:
-        os.environ["ARC_VOICE"] = voice
-        try:
-            cfg_dir = os.path.expanduser("~/.config/arc")
-            os.makedirs(cfg_dir, exist_ok=True)
-            with open(os.path.join(cfg_dir, "voice.txt"), "w", encoding="utf-8") as f:
-                f.write(voice.strip() + "\n")
-        except Exception as e:
-            print(f"⚠️ local persist of voice failed: {e}")
+        _apply_selected_voice(voice)
 
-    # Language from header > JSON > saved settings > env > default 'en'
-    hdr_lang = req.headers.get("x-language") or req.headers.get("x-lang")
-    lang = (hdr_lang or (body.language or "").strip()
-            or load_settings().get("sttLanguage")
-            or os.environ.get("WHISPER_LANG") or "").strip()
-    lang = _norm_lang(lang)
+    s = load_settings()
+    lang = (body.language or "").strip().lower()
+    if not lang:
+        env_lang = (os.environ.get("ARC_TTS_LANG") or "").strip().lower()
+        cfg_lang = (s.get("sttLanguage") or "").strip().lower()
+        if cfg_lang == "auto":
+            cfg_lang = ""
+        whisper_lang = (os.environ.get("WHISPER_LANG") or "").strip().lower()
+        lang = env_lang or cfg_lang or whisper_lang or "en"
 
-    # Try synth
     wav_bytes = _synthesize_to_wav_bytes(text, voice, lang)
     if not wav_bytes:
-        raise HTTPException(status_code=501, detail="No server TTS available.")
+        raise HTTPException(
+            status_code=500,
+            detail=f"No working TTS backend found (voice='{voice or ''}', language='{lang}')."
+        )
 
     fmt = (body.format or "mp3").lower()
     if fmt not in ("mp3", "wav"):
@@ -615,7 +481,6 @@ async def tts(req: Request, body: TTSIn):
     if fmt == "wav":
         return StreamingResponse(io.BytesIO(wav_bytes), media_type="audio/wav")
 
-    # WAV -> MP3
     fd, tmp_wav = tempfile.mkstemp(suffix=".wav"); os.close(fd)
     try:
         with open(tmp_wav, "wb") as fh:
